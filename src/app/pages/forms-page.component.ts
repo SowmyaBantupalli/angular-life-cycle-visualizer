@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { delay, of, switchMap, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ChangeDetectionService } from '../services/change-detection.service';
@@ -11,7 +12,7 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
 @Component({
   selector: 'app-forms-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, MatSnackBarModule],
   changeDetection: ChangeDetectionStrategy.Default,
   template: `
     <section class="forms-page" [class.checked]="lifecycleTracker.isActive(componentName)">
@@ -19,7 +20,7 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
         <div>
           <p class="eyebrow">Critical interaction flow</p>
           <h1>Forms make Angular's hidden work easy to explain.</h1>
-          <p>Focus, type, blur, change options, and submit. The inspector stays quiet until you act, then breaks down that one interaction.</p>
+          <p>Focus, type, blur, change, submit, and watch snackbar and validation behavior explain what Angular actually did.</p>
         </div>
         <div class="status">
           <span>Status</span>
@@ -203,7 +204,8 @@ export class FormsPageComponent extends TrackedComponentBase {
     lifecycleTracker: LifecycleTrackerService,
     changeDetection: ChangeDetectionService,
     private readonly zoneTracker: ZoneTrackerService,
-    private readonly formBuilder: FormBuilder
+    private readonly formBuilder: FormBuilder,
+    private readonly snackBar: MatSnackBar
   ) {
     super('FormComponent', lifecycleTracker, changeDetection);
 
@@ -392,8 +394,28 @@ export class FormsPageComponent extends TrackedComponentBase {
       })
     ).subscribe((payload) => {
       this.changeDetection.markSkipped('HeaderComponent', 'The header stayed untouched while the form submission completed.');
-      this.changeDetection.markDomUpdate(`Submission completed for ${payload.project || 'an untitled project'}.`);
+      const snackBarRef = this.snackBar.open(`Workspace created for ${payload.project || 'your project'}.`, 'Dismiss', {
+        duration: 2200
+      });
+      this.zoneTracker.markObservable('Snackbar opened', 'A Material snackbar appeared as async feedback after the form submit completed.');
+      this.changeDetection.markDomUpdate(`Submission completed for ${payload.project || 'an untitled project'} and a snackbar appeared.`);
       this.form.markAsPristine();
+
+      snackBarRef.afterDismissed().subscribe(() => {
+        this.zoneTracker.beginInteraction({
+          action: 'Snackbar auto-dismissed after form submit',
+          component: 'SnackbarOverlay',
+          triggerType: 'async',
+          reasons: [
+            'A snackbar duration timer completed after the original submit interaction.',
+            'Angular checked the overlay because the snackbar visibility changed.',
+            'The snackbar was removed from the DOM without another direct user event.'
+          ],
+          optimization: 'Snackbars are compact async overlays. They are useful for teaching how timers re-enter Angular through Zone.js.',
+          uiChange: 'The snackbar disappeared after its timer completed.'
+        });
+        this.changeDetection.markDomUpdate('The snackbar disappeared after its timer completed.');
+      });
     });
   }
 }

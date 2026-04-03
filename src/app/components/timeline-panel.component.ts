@@ -16,7 +16,10 @@ type OverlayConcept =
   | 'focus'
   | 'blur'
   | 'input'
-  | 'change';
+  | 'change'
+  | 'hover'
+  | 'async'
+  | 'overlay';
 
 interface OverlayContent {
   title: string;
@@ -39,7 +42,7 @@ interface OverlayContent {
         <div>
           <p class="eyebrow">Last interaction inspector</p>
           <h1>Why Angular reacted</h1>
-          <p class="subtext">Default view stays simple. Click a step or trigger type to open the deeper explanation overlay.</p>
+          <p class="subtext">Default view stays simple. Click a trigger, step, or hook to open the deeper explanation overlay.</p>
         </div>
         <div class="actions" *ngIf="timeline.record()">
           <button type="button" (click)="timeline.replay()">Replay steps</button>
@@ -76,10 +79,7 @@ interface OverlayContent {
             <p>This is the causal chain for the last user action, not a live event stream.</p>
           </div>
 
-          <article
-            class="step"
-            *ngFor="let step of visibleSteps(record.steps); let index = index"
-            [class.highlight]="!!step.component">
+          <article class="step" *ngFor="let step of visibleSteps(record.steps); let index = index" [class.highlight]="!!step.component">
             <div class="step-index">{{ index + 1 }}</div>
             <div class="step-copy">
               <button type="button" class="step-title" (click)="openStep(step, record)">
@@ -141,7 +141,7 @@ interface OverlayContent {
       <ng-template #idleState>
         <section class="idle">
           <h2>Idle until the next interaction</h2>
-          <p>Click, focus, type, blur, change, submit, or navigate on the left. Then click any concept here to open the deeper explanation overlay.</p>
+          <p>Click, focus, type, blur, change, hover, submit, or navigate on the left. Then click any concept here to open the deeper explanation overlay.</p>
         </section>
       </ng-template>
 
@@ -212,7 +212,6 @@ interface OverlayContent {
 
     .heading h1,
     .section h2,
-    .step h3,
     .overlay h2,
     .overlay h3 {
       margin: 0;
@@ -441,34 +440,18 @@ interface OverlayContent {
     }
 
     @keyframes enter {
-      from {
-        opacity: 0;
-        transform: translateY(6px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     @keyframes fade-in {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     @keyframes slide-in {
-      from {
-        opacity: 0;
-        transform: translateX(18px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
+      from { opacity: 0; transform: translateX(18px); }
+      to { opacity: 1; transform: translateX(0); }
     }
 
     @media (max-width: 1080px) {
@@ -553,6 +536,12 @@ export class TimelinePanelComponent {
       this.overlayState.set({ concept: 'input' });
     } else if (trigger.includes('change')) {
       this.overlayState.set({ concept: 'change' });
+    } else if (trigger.includes('hover')) {
+      this.overlayState.set({ concept: 'hover' });
+    } else if (trigger.includes('async')) {
+      this.overlayState.set({ concept: 'async' });
+    } else if (trigger.includes('overlay')) {
+      this.overlayState.set({ concept: 'overlay' });
     } else {
       this.overlayState.set({ concept: 'click' });
     }
@@ -583,7 +572,7 @@ export class TimelinePanelComponent {
             `This example: ${record.action}. Zone.js noticed the event before Angular checked ${record.component}.`,
             'Another common case: setTimeout completes, Zone.js notices it, and Angular can update the bound UI automatically.'
           ],
-          insight: 'Zone.js is the reason Angular feels automatic. If Angular reacted after a focus, blur, or click without you calling anything manually, Zone.js is the missing link.'
+          insight: 'Zone.js is the reason Angular feels automatic. If Angular reacted after a focus, blur, click, or timer without you calling anything manually, Zone.js is the missing link.'
         };
       case 'cd':
         return {
@@ -730,6 +719,45 @@ export class TimelinePanelComponent {
           ],
           insight: 'Change is a commit-style event. It means the control settled on a value that Angular should treat as the new source of truth.'
         };
+      case 'hover':
+        return {
+          title: 'Hover event - Lightweight visual reaction',
+          subtitle: context,
+          whatItIs: 'A hover event is a pointer-driven interaction that usually reveals lightweight UI like a tooltip or hover styling.',
+          whyItExists: 'It lets Angular respond to user intent before a full click, which is useful for hints, previews, and subtle interface feedback.',
+          whenItRuns: `Here it ran because ${record.action.toLowerCase()} and Angular needed to update a lightweight hover-driven UI state.`,
+          examples: [
+            `This example: ${record.action}. Angular reacted without a full page-level state change.`,
+            'Another common case: hovering a help icon shows a tooltip, then mouse leave hides it again.'
+          ],
+          insight: 'Hover should feel cheap. If a hover causes broad work, your component boundaries are probably too loose.'
+        };
+      case 'async':
+        return {
+          title: 'Async event - Work that finished later',
+          subtitle: context,
+          whatItIs: 'An async event happens after the original user action when a timer, observable, or overlay callback completes.',
+          whyItExists: 'Angular apps regularly update after the user action has already finished, and Zone.js is what lets Angular notice those later completions automatically.',
+          whenItRuns: `Here it ran because ${record.action.toLowerCase()} happened after the original interaction had already moved on.`,
+          examples: [
+            `This example: ${record.action}. Angular reacted when later async state arrived.`,
+            'Another common case: a snackbar auto-dismiss timer finishes and Angular removes it without another click.'
+          ],
+          insight: 'A lot of Angular feels automatic because async completions re-enter the framework without manual wiring.'
+        };
+      case 'overlay':
+        return {
+          title: 'Overlay open or close - Floating UI lifecycle',
+          subtitle: context,
+          whatItIs: 'Overlay events happen when dialogs, menus, snackbars, and tooltips mount or tear down outside the normal page flow.',
+          whyItExists: 'Angular uses overlays for focused UI that should float above the page while still participating in change detection and lifecycle.',
+          whenItRuns: `Here it ran because ${record.action.toLowerCase()} changed the visibility of overlay-based UI.`,
+          examples: [
+            `This example: ${record.action}. Angular mounted or removed overlay UI while keeping the page context visible.`,
+            'Another common case: opening a dialog creates an overlay component, and closing it destroys that component again.'
+          ],
+          insight: 'Overlays are some of the clearest ways to see component mount and unmount behavior in a real Angular app.'
+        };
       case 'click':
         return {
           title: 'Click event - Direct pointer interaction',
@@ -741,7 +769,7 @@ export class TimelinePanelComponent {
             `This example: ${record.action}. Angular handled the click and updated the related UI state.`,
             'Another common case: clicking pagination triggers a list update, so Angular re-evaluates the current page of rows.'
           ],
-          insight: 'Click is only one event type in the story. Real Angular behavior also depends heavily on focus, blur, input, and change.'
+          insight: 'Click is only one event type in the story. Real Angular behavior also depends heavily on focus, blur, input, change, hover, and async completion.'
         };
       default:
         return {
