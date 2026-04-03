@@ -15,6 +15,7 @@ import { DashboardItem, ItemCardComponent } from '../components/item-card.compon
 import { LazyAnalyticsTabComponent } from '../components/lazy-analytics-tab.component';
 import { ChangeDetectionService } from '../services/change-detection.service';
 import { LifecycleTrackerService } from '../services/lifecycle-tracker.service';
+import { MetricsService } from '../services/metrics.service';
 import { ZoneTrackerService } from '../services/zone-tracker.service';
 import { TrackedComponentBase } from '../shared/tracked-component.base';
 
@@ -76,8 +77,8 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
           <span>Revenue this week</span>
         </article>
         <article>
-          <strong>{{ stats().latency }}</strong>
-          <span>Median API latency</span>
+          <strong>{{ metrics.lastDuration() | number:'1.1-2' }} ms</strong>
+          <span>Last Angular event</span>
         </article>
       </section>
 
@@ -335,7 +336,8 @@ export class DashboardPageComponent extends TrackedComponentBase {
     lifecycleTracker: LifecycleTrackerService,
     changeDetection: ChangeDetectionService,
     private readonly zoneTracker: ZoneTrackerService,
-    private readonly dialog: MatDialog
+    private readonly dialog: MatDialog,
+    public readonly metrics: MetricsService
   ) {
     super('ListComponent', lifecycleTracker, changeDetection);
   }
@@ -587,3 +589,4 @@ export class DashboardPageComponent extends TrackedComponentBase {
     });
   }
 }
+

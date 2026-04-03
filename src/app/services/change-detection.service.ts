@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { LifecycleTrackerService } from './lifecycle-tracker.service';
+import { MetricsService } from './metrics.service';
 import { TimelineService } from './timeline.service';
 
 @Injectable({ providedIn: 'root' })
@@ -11,11 +12,13 @@ export class ChangeDetectionService {
 
   constructor(
     private readonly timeline: TimelineService,
-    private readonly lifecycleTracker: LifecycleTrackerService
+    private readonly lifecycleTracker: LifecycleTrackerService,
+    private readonly metrics: MetricsService
   ) {}
 
   startCycle(reason: string): void {
     this.currentReason.set(reason);
+    this.metrics.start();
     this.cycleStart = performance.now();
     this.timeline.addStep('cd', 'Change detection triggered', `ApplicationRef.tick() ran because ${reason}.`);
   }
@@ -46,7 +49,7 @@ export class ChangeDetectionService {
   }
 
   markDomUpdate(detail: string): void {
-    const duration = this.cycleStart ? performance.now() - this.cycleStart : 0;
+    const duration = this.metrics.finish();
     this.lastDuration.set(duration);
     this.timeline.addStep('dom', 'DOM updated', detail);
     this.timeline.finishInteraction(detail);

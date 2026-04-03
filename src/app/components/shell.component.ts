@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
+import { APP_CONFIG } from '../app.constants';
 import { ChangeDetectionService } from '../services/change-detection.service';
 import { LifecycleTrackerService } from '../services/lifecycle-tracker.service';
+import { TimelineService } from '../services/timeline.service';
 import { ZoneTrackerService } from '../services/zone-tracker.service';
 import { TrackedComponentBase } from '../shared/tracked-component.base';
-import { APP_CONFIG } from '../app.constants';
 
 @Component({
   selector: 'app-shell',
@@ -40,7 +41,10 @@ import { APP_CONFIG } from '../app.constants';
               (focus)="trackSearchFocus()"
               (blur)="trackSearchBlur()" />
           </label>
-          <button class="icon-button" type="button" (click)="openNotifications()">9</button>
+          <button class="icon-button events-badge" type="button" (click)="openNotifications()">
+            <span class="events-icon">Bell</span>
+            <span>Events: {{ timeline.totalInteractions() }}</span>
+          </button>
           <div class="profile-wrap" #profileWrap (focusout)="handleProfileBlur()">
             <button class="profile" type="button" (click)="toggleProfile()">
               <span class="avatar">{{ userInitials }}</span>
@@ -162,6 +166,25 @@ import { APP_CONFIG } from '../app.constants';
       color: var(--text);
     }
 
+    .events-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .events-icon {
+      width: 26px;
+      height: 26px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(12, 124, 120, 0.12);
+      color: var(--brand);
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
     .profile-wrap {
       position: relative;
     }
@@ -247,7 +270,8 @@ export class ShellComponent extends TrackedComponentBase {
     lifecycleTracker: LifecycleTrackerService,
     changeDetection: ChangeDetectionService,
     private readonly zoneTracker: ZoneTrackerService,
-    private readonly router: Router
+    private readonly router: Router,
+    public readonly timeline: TimelineService
   ) {
     super('HeaderComponent', lifecycleTracker, changeDetection);
 
@@ -297,19 +321,19 @@ export class ShellComponent extends TrackedComponentBase {
 
   openNotifications(): void {
     this.zoneTracker.beginInteraction({
-      action: 'User clicked the notification bell',
+      action: 'User opened the event counter badge',
       component: 'HeaderComponent',
       triggerType: 'click',
       reasons: [
         'The click event reached Angular through Zone.js.',
         'Angular checked the shell because a template event handler ran.',
-        'The header badge state could update after the click.'
+        'The labeled badge reflects the number of interactions recorded since the last clear.'
       ],
-      optimization: 'This is another localized header interaction. OnPush keeps it from pulling unrelated content into the same pass.',
-      uiChange: 'Notification indicator acknowledged the click.'
+      optimization: 'A counter is only useful when it reflects real app state. Binding it to interaction count keeps the badge honest without adding extra logging noise.',
+      uiChange: 'The event counter badge was focused for inspection.'
     });
-    this.changeDetection.markSkipped('FormComponent', 'The forms view does not need to participate in a notification click.');
-    this.changeDetection.markDomUpdate('Notification badge acknowledged the click.');
+    this.changeDetection.markSkipped('FormComponent', 'The forms view does not need to participate when the event counter badge is inspected.');
+    this.changeDetection.markDomUpdate('The event counter badge was focused for inspection.');
   }
 
   trackSearchFocus(): void {

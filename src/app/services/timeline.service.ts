@@ -10,10 +10,12 @@ export class TimelineService {
   readonly record = signal<InteractionRecord | null>(null);
   readonly replayVisibleSteps = signal<number>(0);
   readonly interactionActive = signal(false);
+  readonly totalInteractions = signal(0);
 
   beginInteraction(start: InteractionStart): void {
     this.stopReplay();
     this.nextStepId = 1;
+    this.totalInteractions.update((count) => count + 1);
     this.current = {
       action: start.action,
       component: start.component,
@@ -134,6 +136,7 @@ export class TimelineService {
     this.record.set(null);
     this.replayVisibleSteps.set(0);
     this.interactionActive.set(false);
+    this.totalInteractions.set(0);
   }
 
   private stopReplay(): void {
