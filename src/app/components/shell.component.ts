@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
@@ -7,6 +7,7 @@ import { ChangeDetectionService } from '../services/change-detection.service';
 import { LifecycleTrackerService } from '../services/lifecycle-tracker.service';
 import { ZoneTrackerService } from '../services/zone-tracker.service';
 import { TrackedComponentBase } from '../shared/tracked-component.base';
+import { APP_CONFIG } from '../app.constants';
 
 @Component({
   selector: 'app-shell',
@@ -33,13 +34,17 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
 
         <div class="toolbar">
           <label class="search">
-            <input [formControl]="searchControl" placeholder="Search customers, invoices, alerts" />
+            <input
+              [formControl]="searchControl"
+              placeholder="Search customers, invoices, alerts"
+              (focus)="trackSearchFocus()"
+              (blur)="trackSearchBlur()" />
           </label>
           <button class="icon-button" type="button" (click)="openNotifications()">9</button>
-          <div class="profile-wrap">
+          <div class="profile-wrap" #profileWrap (focusout)="handleProfileBlur()">
             <button class="profile" type="button" (click)="toggleProfile()">
-              <span class="avatar">RA</span>
-              <span>Raj</span>
+              <span class="avatar">{{ userInitials }}</span>
+              <span>{{ userName }}</span>
             </button>
             <div class="dropdown" *ngIf="profileOpen">
               <button type="button" (click)="navigateTo('/settings')">Account settings</button>
@@ -231,8 +236,12 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
   `]
 })
 export class ShellComponent extends TrackedComponentBase {
+  @ViewChild('profileWrap') profileWrap?: ElementRef<HTMLElement>;
+
   readonly searchControl = new FormControl('', { nonNullable: true });
+  readonly userName = APP_CONFIG.userName;
   profileOpen = false;
+  private profileBlurTimeout: number | null = null;
 
   constructor(
     lifecycleTracker: LifecycleTrackerService,
@@ -246,7 +255,7 @@ export class ShellComponent extends TrackedComponentBase {
       this.zoneTracker.beginInteraction({
         action: `User typed in search: ${value || 'empty'}`,
         component: 'HeaderComponent',
-        triggerType: 'DOM event (input)',
+        triggerType: 'input',
         reasons: [
           'A header input event entered Angular through Zone.js.',
           'The reactive FormControl emitted a new value.',
@@ -261,11 +270,19 @@ export class ShellComponent extends TrackedComponentBase {
     });
   }
 
+  get userInitials(): string {
+    return this.userName
+      .split(' ')
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('')
+      .slice(0, 2);
+  }
+
   toggleProfile(): void {
     this.zoneTracker.beginInteraction({
       action: `User ${this.profileOpen ? 'closed' : 'opened'} the profile dropdown`,
       component: 'HeaderComponent',
-      triggerType: 'DOM event (click)',
+      triggerType: 'click',
       reasons: [
         'A click event entered Angular through Zone.js.',
         'Angular ran change detection so the dropdown visibility binding could be re-evaluated.',
@@ -282,7 +299,7 @@ export class ShellComponent extends TrackedComponentBase {
     this.zoneTracker.beginInteraction({
       action: 'User clicked the notification bell',
       component: 'HeaderComponent',
-      triggerType: 'DOM event (click)',
+      triggerType: 'click',
       reasons: [
         'The click event reached Angular through Zone.js.',
         'Angular checked the shell because a template event handler ran.',
@@ -295,11 +312,44 @@ export class ShellComponent extends TrackedComponentBase {
     this.changeDetection.markDomUpdate('Notification badge acknowledged the click.');
   }
 
+  trackSearchFocus(): void {
+    this.zoneTracker.beginInteraction({
+      action: 'User focused the header search field',
+      component: 'HeaderComponent',
+      triggerType: 'focus',
+      reasons: [
+        'A focus event entered Angular through Zone.js.',
+        'Angular checked the header so focus styling could apply.',
+        'The search field is now ready to receive keyboard input.'
+      ],
+      optimization: 'Focus events are tiny UI updates. Good boundaries keep this from becoming a broader check than necessary.',
+      uiChange: 'The header search field received focus styling.'
+    });
+    this.changeDetection.markSkipped('ListComponent', 'The list does not need to react when the search field simply receives focus.');
+    this.changeDetection.markDomUpdate('The header search field received focus styling.');
+  }
+
+  trackSearchBlur(): void {
+    this.zoneTracker.beginInteraction({
+      action: 'User blurred the header search field',
+      component: 'HeaderComponent',
+      triggerType: 'blur',
+      reasons: [
+        'A blur event entered Angular through Zone.js.',
+        'Angular checked the header so focus styling could be removed.',
+        'The search field left its active state when focus moved elsewhere.'
+      ],
+      optimization: 'Blur should stay localized to the control that lost focus. OnPush boundaries keep the rest of the screen out of the pass.',
+      uiChange: 'The header search field lost focus styling.'
+    });
+    this.changeDetection.markDomUpdate('The header search field lost focus styling.');
+  }
+
   navigateTo(path: string): void {
     this.zoneTracker.beginInteraction({
       action: `User navigated to ${path}`,
       component: 'HeaderComponent',
-      triggerType: 'DOM event (click)',
+      triggerType: 'click',
       reasons: [
         'A header click triggered the Angular router.',
         'Router navigation recreated the routed page component.',
@@ -317,7 +367,7 @@ export class ShellComponent extends TrackedComponentBase {
     this.zoneTracker.beginInteraction({
       action: `User clicked footer link to ${path}`,
       component: 'FooterComponent',
-      triggerType: 'DOM event (click)',
+      triggerType: 'click',
       reasons: [
         'The click event was handled by Angular RouterLink.',
         'The current routed component is destroyed and the new one is created.',
@@ -326,5 +376,63 @@ export class ShellComponent extends TrackedComponentBase {
       optimization: 'Route changes are expected to recreate page components. The main optimization opportunity is reducing extra work inside the destination screen after it mounts.',
       uiChange: `The outlet started navigating to ${path}.`
     });
+  }
+
+  handleProfileBlur(): void {
+    if (!this.profileOpen) {
+      return;
+    }
+
+    if (this.profileBlurTimeout !== null) {
+      window.clearTimeout(this.profileBlurTimeout);
+    }
+
+    this.profileBlurTimeout = window.setTimeout(() => {
+      const activeElement = document.activeElement as Node | null;
+      if (activeElement && this.profileWrap?.nativeElement.contains(activeElement)) {
+        return;
+      }
+
+      this.zoneTracker.beginInteraction({
+        action: 'Profile dropdown closed after blur',
+        component: 'HeaderComponent',
+        triggerType: 'blur',
+        reasons: [
+          'A blur event entered Angular when focus left the profile menu.',
+          'Angular checked the header because the dropdown visibility binding changed.',
+          'The menu closed so the UI would not stay stuck open after focus moved away.'
+        ],
+        optimization: 'Blur-driven close behavior keeps keyboard interactions correct without forcing unrelated parts of the page into the same pass.',
+        uiChange: 'The profile dropdown closed after losing focus.'
+      });
+      this.profileOpen = false;
+      this.changeDetection.markDomUpdate('The profile dropdown closed after losing focus.');
+    }, 100);
+  }
+
+  @HostListener('document:click', ['$event'])
+  handleClickOutside(event: Event): void {
+    if (!this.profileOpen || !this.profileWrap) {
+      return;
+    }
+
+    if (this.profileWrap.nativeElement.contains(event.target as Node)) {
+      return;
+    }
+
+    this.zoneTracker.beginInteraction({
+      action: 'Profile dropdown closed from outside click',
+      component: 'HeaderComponent',
+      triggerType: 'click',
+      reasons: [
+        'A document click reached Angular outside the profile menu.',
+        'Angular checked the header because dropdown visibility changed.',
+        'Closing on outside click prevents the menu from staying open after the user moved away.'
+      ],
+      optimization: 'Combining outside click with blur gives correct mouse and keyboard behavior without relying on only one event source.',
+      uiChange: 'The profile dropdown closed after clicking outside it.'
+    });
+    this.profileOpen = false;
+    this.changeDetection.markDomUpdate('The profile dropdown closed after clicking outside it.');
   }
 }

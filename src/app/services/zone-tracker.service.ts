@@ -18,7 +18,11 @@ export class ZoneTrackerService {
 
   beginInteraction(start: InteractionStart): void {
     this.timeline.beginInteraction(start);
-    this.timeline.addStep('zone', 'Zone.js intercepted the event', 'Angular became aware of the DOM event through Zone.js.');
+    this.timeline.addStep(
+      'zone',
+      `Zone.js intercepted ${start.triggerType}`,
+      `Angular became aware of the ${start.triggerType} through Zone.js.`
+    );
     this.changeDetection.startCycle(start.reasons[0] ?? 'a user interaction reached Angular');
   }
 

@@ -7,6 +7,7 @@ import { LifecycleTrackerService } from '../services/lifecycle-tracker.service';
 import { ZoneTrackerService } from '../services/zone-tracker.service';
 import { TrackedComponentBase } from '../shared/tracked-component.base';
 import { DashboardItem, ItemCardComponent } from '../components/item-card.component';
+import { APP_CONFIG } from '../app.constants';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -18,7 +19,7 @@ import { DashboardItem, ItemCardComponent } from '../components/item-card.compon
       <section class="hero" [class.checked]="lifecycleTracker.isActive(componentName)">
         <div>
           <p class="eyebrow">Operations dashboard</p>
-          <h1>Welcome back, Raj. The app stays quiet until you do something.</h1>
+          <h1>Welcome back, {{ userName }}. The app stays quiet until you do something.</h1>
           <p>Run the CTA, change pages, or remove an item to see one isolated Angular explanation in the inspector.</p>
         </div>
         <button type="button" (click)="triggerLoad()">Run CTA and API simulation</button>
@@ -196,6 +197,7 @@ import { DashboardItem, ItemCardComponent } from '../components/item-card.compon
   `]
 })
 export class DashboardPageComponent extends TrackedComponentBase {
+  readonly userName = APP_CONFIG.userName;
   readonly page = signal(1);
   readonly useTrackBy = signal(true);
   readonly stats = signal({

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
-import { debounceTime, delay, distinctUntilChanged, of, switchMap, timer } from 'rxjs';
+import { delay, of, switchMap, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ChangeDetectionService } from '../services/change-detection.service';
 import { LifecycleTrackerService } from '../services/lifecycle-tracker.service';
@@ -19,7 +19,7 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
         <div>
           <p class="eyebrow">Critical interaction flow</p>
           <h1>Forms make Angular's hidden work easy to explain.</h1>
-          <p>Type into the fields, change options, and submit. The inspector stays quiet until you act, then breaks down that one interaction.</p>
+          <p>Focus, type, blur, change options, and submit. The inspector stays quiet until you act, then breaks down that one interaction.</p>
         </div>
         <div class="status">
           <span>Status</span>
@@ -30,19 +30,33 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
       <form class="form" [formGroup]="form" (ngSubmit)="submit()">
         <label>
           <span>Project name</span>
-          <input formControlName="project" placeholder="Acme expansion portal" />
+          <input
+            formControlName="project"
+            placeholder="Acme expansion portal"
+            (focus)="trackFieldFocus('Project')"
+            (blur)="trackFieldBlur('Project')"
+            (input)="trackProjectInput($event)" />
           <small>{{ projectMessage }}</small>
         </label>
 
         <label>
           <span>Email</span>
-          <input formControlName="email" placeholder="owner@company.com" />
+          <input
+            formControlName="email"
+            placeholder="owner@company.com"
+            (focus)="trackFieldFocus('Email')"
+            (blur)="trackEmailBlur()"
+            (input)="trackEmailInput($event)" />
           <small>{{ emailMessage }}</small>
         </label>
 
         <label>
           <span>Workspace type</span>
-          <select formControlName="workspace" (change)="trackWorkspaceChange($event)">
+          <select
+            formControlName="workspace"
+            (focus)="trackFieldFocus('Workspace')"
+            (blur)="trackFieldBlur('Workspace')"
+            (change)="trackWorkspaceChange($event)">
             <option value="Operations">Operations</option>
             <option value="Finance">Finance</option>
             <option value="Support">Support</option>
@@ -51,14 +65,14 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
 
         <fieldset>
           <legend>Integrations</legend>
-          <label><input type="checkbox" formControlName="alerts" (change)="trackIntegrationToggle('Alerts', $event)" /> Alerts</label>
-          <label><input type="checkbox" formControlName="analytics" (change)="trackIntegrationToggle('Analytics', $event)" /> Analytics</label>
+          <label><input type="checkbox" formControlName="alerts" (focus)="trackFieldFocus('Alerts toggle')" (blur)="trackFieldBlur('Alerts toggle')" (change)="trackIntegrationToggle('Alerts', $event)" /> Alerts</label>
+          <label><input type="checkbox" formControlName="analytics" (focus)="trackFieldFocus('Analytics toggle')" (blur)="trackFieldBlur('Analytics toggle')" (change)="trackIntegrationToggle('Analytics', $event)" /> Analytics</label>
         </fieldset>
 
         <fieldset>
           <legend>Environment</legend>
-          <label><input type="radio" value="Preview" formControlName="environment" (change)="trackEnvironmentChange('Preview')" /> Preview</label>
-          <label><input type="radio" value="Production" formControlName="environment" (change)="trackEnvironmentChange('Production')" /> Production</label>
+          <label><input type="radio" value="Preview" formControlName="environment" (focus)="trackFieldFocus('Preview environment')" (blur)="trackFieldBlur('Preview environment')" (change)="trackEnvironmentChange('Preview')" /> Preview</label>
+          <label><input type="radio" value="Production" formControlName="environment" (focus)="trackFieldFocus('Production environment')" (blur)="trackFieldBlur('Production environment')" (change)="trackEnvironmentChange('Production')" /> Production</label>
         </fieldset>
 
         <button type="submit" [disabled]="form.invalid || form.pending">Submit form</button>
@@ -193,77 +207,117 @@ export class FormsPageComponent extends TrackedComponentBase {
   ) {
     super('FormComponent', lifecycleTracker, changeDetection);
 
-    this.form.controls.project.valueChanges.pipe(
-      debounceTime(120),
-      distinctUntilChanged()
-    ).subscribe((value) => {
-      this.zoneTracker.beginInteraction({
-        action: `User typed in Project field: ${value || 'empty'}`,
-        component: 'FormComponent',
-        triggerType: 'DOM event (input)',
-        reasons: [
-          'A DOM input event entered Angular through Zone.js.',
-          'The reactive form control emitted valueChanges for the project field.',
-          'Angular checked the form so helper text and submit state could be recalculated.'
-        ],
-        optimization: 'This interaction currently checks the form using the default strategy. Splitting dense form regions into smaller OnPush sections can localize the work.',
-        uiChange: `Project helper text refreshed for ${value || 'an empty value'}.`
-      });
-      this.zoneTracker.markObservable('valueChanges emitted', `The project control emitted "${value || 'empty'}".`);
-      this.zoneTracker.markValidation(value && value.length >= 3
-        ? 'The required and min-length validators passed for the project field.'
-        : 'The required and min-length validators ran and the field is still invalid.');
-      this.projectMessage = value && value.length >= 3
-        ? 'valueChanges fired, validators passed, and the form can settle.'
-        : 'valueChanges fired, validators ran, and the project field still needs more input.';
-      this.changeDetection.markSkipped('HeaderComponent', 'The header does not need to update for a form-only input event.');
-      this.changeDetection.markDomUpdate(`Project helper text refreshed for ${value || 'an empty value'}.`);
-    });
-
-    this.form.controls.email.valueChanges.pipe(
-      debounceTime(120),
-      distinctUntilChanged()
-    ).subscribe((value) => {
-      this.zoneTracker.beginInteraction({
-        action: `User typed in Email field: ${value || 'empty'}`,
-        component: 'FormComponent',
-        triggerType: 'DOM event (input)',
-        reasons: [
-          'A DOM input event entered Angular through Zone.js.',
-          'The reactive email control emitted valueChanges.',
-          'Angular checked the form so validation and error messaging could update.'
-        ],
-        optimization: 'Default change detection is fine for learning, but OnPush boundaries can stop email typing from checking unrelated feature areas.',
-        uiChange: `Email state updated for ${value || 'an empty value'}.`
-      });
-      this.zoneTracker.markObservable('valueChanges emitted', `The email control emitted "${value || 'empty'}".`);
-      this.zoneTracker.markValidation('Angular ran synchronous email validation and kicked off the async blocked-domain validator.');
-      this.changeDetection.markSkipped('ListComponent', 'The dashboard list is unrelated to email typing and can stay skipped.');
-    });
-
     this.form.controls.email.statusChanges.subscribe((status) => {
-      if (!this.zoneTracker.zoneState) {
-        return;
-      }
-
       this.emailMessage = status === 'PENDING'
         ? 'Async validator running through an observable.'
         : status === 'VALID'
           ? 'Async validator resolved and the email can be submitted.'
           : 'Email is invalid or blocked by the async validator.';
-
-      if (status === 'PENDING') {
-        this.zoneTracker.markObservable('Async validator started', 'Angular subscribed to the blocked-domain validator observable.');
-        return;
-      }
-
-      this.zoneTracker.markValidation(
-        status === 'VALID'
-          ? 'The async validator completed and the email passed.'
-          : 'The async validator completed and the email remains invalid or blocked.'
-      );
-      this.changeDetection.markDomUpdate(`Email helper text refreshed after status ${status}.`);
     });
+  }
+
+  trackFieldFocus(field: string): void {
+    this.zoneTracker.beginInteraction({
+      action: `${field} focus`,
+      component: 'FormComponent',
+      triggerType: 'focus',
+      reasons: [
+        'A focus event entered Angular through Zone.js.',
+        'Angular checked the form so active field styling could update.',
+        'The field is now ready for keyboard interaction and accessibility focus flow.'
+      ],
+      optimization: 'Focus is a tiny UI event. Good component boundaries keep this from becoming a broader check than necessary.',
+      uiChange: `${field} focus styling is now active.`
+    });
+    this.changeDetection.markSkipped('HeaderComponent', 'The header does not need to react when a form control gains focus.');
+    this.changeDetection.markDomUpdate(`${field} focus styling is now active.`);
+  }
+
+  trackFieldBlur(field: string): void {
+    this.zoneTracker.beginInteraction({
+      action: `${field} blur`,
+      component: 'FormComponent',
+      triggerType: 'blur',
+      reasons: [
+        'A blur event entered Angular through Zone.js.',
+        'Angular checked the form because the active field lost focus.',
+        'Blur matters because touched state and field-level UI can change when focus leaves.'
+      ],
+      optimization: 'Blur-driven updates should stay local to the control that lost focus. OnPush boundaries keep unrelated regions out of the pass.',
+      uiChange: `${field} focus styling was removed.`
+    });
+    this.changeDetection.markDomUpdate(`${field} focus styling was removed.`);
+  }
+
+  trackProjectInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.zoneTracker.beginInteraction({
+      action: 'Project input',
+      component: 'FormComponent',
+      triggerType: 'input',
+      reasons: [
+        'An input event entered Angular through Zone.js.',
+        'The reactive project control emitted valueChanges for the new text.',
+        'Angular checked the form so helper text and submit state could react to the latest value.'
+      ],
+      optimization: 'This still uses default change detection. Smaller OnPush form regions would keep fast typing more tightly scoped.',
+      uiChange: `Project helper text refreshed for ${value || 'an empty value'}.`
+    });
+    this.zoneTracker.markObservable('valueChanges emitted', `The project control emitted "${value || 'empty'}".`);
+    this.zoneTracker.markValidation(
+      value && value.length >= 3
+        ? 'The required and min-length validators passed for the project field.'
+        : 'The required and min-length validators ran and the project field is still invalid.'
+    );
+    this.projectMessage = value && value.length >= 3
+      ? 'valueChanges fired, validators passed, and the form can settle.'
+      : 'valueChanges fired, validators ran, and the project field still needs more input.';
+    this.changeDetection.markSkipped('HeaderComponent', 'The header does not need to update for a form-only input event.');
+    this.changeDetection.markDomUpdate(`Project helper text refreshed for ${value || 'an empty value'}.`);
+  }
+
+  trackEmailInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.zoneTracker.beginInteraction({
+      action: 'Email input',
+      component: 'FormComponent',
+      triggerType: 'input',
+      reasons: [
+        'An input event entered Angular through Zone.js.',
+        'The reactive email control emitted valueChanges for the new text.',
+        'Angular checked the form so email state and validator messaging could react.'
+      ],
+      optimization: 'Default change detection makes email typing easy to observe, but OnPush boundaries would stop unrelated sections from joining the pass.',
+      uiChange: `Email field state updated for ${value || 'an empty value'}.`
+    });
+    this.zoneTracker.markObservable('valueChanges emitted', `The email control emitted "${value || 'empty'}".`);
+    this.zoneTracker.markValidation('Angular ran synchronous email validation and started the async blocked-domain check.');
+    this.emailMessage = value ? 'Typing updates the field immediately while async validation catches up.' : 'Email is waiting for input.';
+    this.changeDetection.markSkipped('ListComponent', 'The dashboard list is unrelated to email typing and can stay skipped.');
+    this.changeDetection.markDomUpdate(`Email field state updated for ${value || 'an empty value'}.`);
+  }
+
+  trackEmailBlur(): void {
+    this.form.controls.email.markAsTouched();
+    const status = this.form.controls.email.status;
+    this.zoneTracker.beginInteraction({
+      action: 'Email blur',
+      component: 'FormComponent',
+      triggerType: 'blur',
+      reasons: [
+        'A blur event entered Angular through Zone.js.',
+        'Angular checked the form because the email field lost focus.',
+        'Blur matters here because the control becomes touched and validation UI can appear.'
+      ],
+      optimization: 'Blur should only update the control that lost focus. OnPush boundaries keep that touched-state update from widening across the app.',
+      uiChange: `Email validation feedback was refreshed after blur with status ${status}.`
+    });
+    this.zoneTracker.markValidation(
+      status === 'VALID'
+        ? 'The email field was touched on blur and remains valid.'
+        : 'The email field was touched on blur, so validation feedback can now be shown.'
+    );
+    this.changeDetection.markDomUpdate(`Email validation feedback was refreshed after blur with status ${status}.`);
   }
 
   trackWorkspaceChange(event: Event): void {
@@ -271,7 +325,7 @@ export class FormsPageComponent extends TrackedComponentBase {
     this.zoneTracker.beginInteraction({
       action: `User changed workspace to ${value}`,
       component: 'FormComponent',
-      triggerType: 'DOM event (change)',
+      triggerType: 'change',
       reasons: [
         'A select change event entered Angular through Zone.js.',
         'Angular checked the reactive form bindings for the updated selection.',
@@ -288,7 +342,7 @@ export class FormsPageComponent extends TrackedComponentBase {
     this.zoneTracker.beginInteraction({
       action: `User ${enabled ? 'enabled' : 'disabled'} ${name}`,
       component: 'FormComponent',
-      triggerType: 'DOM event (change)',
+      triggerType: 'change',
       reasons: [
         'A checkbox change event entered Angular through Zone.js.',
         'Angular checked the form bindings for the updated toggle state.',
@@ -304,7 +358,7 @@ export class FormsPageComponent extends TrackedComponentBase {
     this.zoneTracker.beginInteraction({
       action: `User selected ${value} environment`,
       component: 'FormComponent',
-      triggerType: 'DOM event (change)',
+      triggerType: 'change',
       reasons: [
         'A radio input change event entered Angular through Zone.js.',
         'Angular checked the form bindings for the new environment value.',
@@ -320,7 +374,7 @@ export class FormsPageComponent extends TrackedComponentBase {
     this.zoneTracker.beginInteraction({
       action: 'User submitted the form',
       component: 'FormComponent',
-      triggerType: 'DOM event (submit)',
+      triggerType: 'submit',
       reasons: [
         'The submit event entered Angular through ngSubmit.',
         'Angular checked the form because the submit handler ran.',
