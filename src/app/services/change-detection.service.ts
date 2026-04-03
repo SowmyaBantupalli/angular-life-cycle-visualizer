@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { ApplicationRef, Injectable, NgZone, signal } from '@angular/core';
 import { LifecycleTrackerService } from './lifecycle-tracker.service';
 import { MetricsService } from './metrics.service';
 import { TimelineService } from './timeline.service';
@@ -8,19 +8,17 @@ export class ChangeDetectionService {
   readonly currentReason = signal('Idle until the next user interaction');
   readonly lastDuration = signal(0);
 
-  private cycleStart = 0;
-
   constructor(
     private readonly timeline: TimelineService,
     private readonly lifecycleTracker: LifecycleTrackerService,
-    private readonly metrics: MetricsService
+    private readonly metrics: MetricsService,
+    private readonly appRef: ApplicationRef,
+    private readonly ngZone: NgZone
   ) {}
 
   startCycle(reason: string): void {
     this.currentReason.set(reason);
-    this.metrics.start();
-    this.cycleStart = performance.now();
-    this.timeline.addStep('cd', 'Change detection triggered', `ApplicationRef.tick() ran because ${reason}.`);
+    this.timeline.addStep('cd', 'Change detection triggered', `Angular scheduled a change detection pass because ${reason}.`);
   }
 
   markChecked(component: string, detail: string): void {
@@ -49,7 +47,9 @@ export class ChangeDetectionService {
   }
 
   markDomUpdate(detail: string): void {
-    const duration = this.metrics.finish();
+    const start = performance.now();
+    this.ngZone.run(() => this.appRef.tick());
+    const duration = this.metrics.record(performance.now() - start);
     this.lastDuration.set(duration);
     this.timeline.addStep('dom', 'DOM updated', detail);
     this.timeline.finishInteraction(detail);

@@ -77,7 +77,7 @@ import { TrackedComponentBase } from '../shared/tracked-component.base';
           <span>Revenue this week</span>
         </article>
         <article>
-          <strong>{{ metrics.lastDuration() | number:'1.1-2' }} ms</strong>
+          <strong>{{ metrics.lastDuration() | number:'1.3-3' }} ms</strong>
           <span>Last Angular event</span>
         </article>
       </section>
@@ -589,4 +589,5 @@ export class DashboardPageComponent extends TrackedComponentBase {
     });
   }
 }
+
 
